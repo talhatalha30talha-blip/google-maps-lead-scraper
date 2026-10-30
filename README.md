@@ -4,8 +4,7 @@ A robust, asynchronous web scraping tool built with **Python** and **Playwright*
 
 ## 📁 Project Directory Structure
 
-The project follows a clean, modular architecture to separate configuration, core processing logic, inputs, and outputs:
-
+```text
 google-maps-scrapper/
 │
 ├── config/                      # 📁 Configuration settings & selectors
@@ -18,12 +17,11 @@ google-maps-scrapper/
 │   └── dummylocations.json      # Minimal test locations
 │
 ├── processes/                   # 📁 Core automation & processing engine
-│   ├── scraper.py               # Playwright browser automation & infinite scrolling
 │   ├── parser.py                # DOM extraction logic for detail panels
+│   ├── scraper.py               # Playwright browser automation & infinite scrolling
 │   └── storage.py               # Runtime CSV file generator & duplicate validator
 │
 ├── leads/                       # 📁 Generated output folder (hierarchical CSVs)
-│
 ├── venv/                        # Python virtual environment
 ├── main.py                      # CLI entry point & asynchronous orchestrator
 └── requirements.txt             # Project dependencies
