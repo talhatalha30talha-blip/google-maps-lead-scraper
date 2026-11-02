@@ -20,7 +20,9 @@ google-maps-scrapper/
 │   ├── parser.py                # DOM extraction logic for detail panels
 │   ├── scraper.py               # Playwright browser automation & infinite scrolling
 │   └── storage.py               # Runtime CSV file generator & duplicate validator
-│
+│   └── sync_manager.py          # converts the files in excel form and send them to a link
+|
+|
 ├── leads/                       # 📁 Generated output folder (hierarchical CSVs)
 ├── venv/                        # Python virtual environment
 ├── main.py                      # CLI entry point & asynchronous orchestrator
