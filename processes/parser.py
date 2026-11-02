@@ -1,4 +1,3 @@
-# parser.py
 import asyncio
 from config.config import SELECTORS
 
