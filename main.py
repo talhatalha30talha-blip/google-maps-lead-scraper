@@ -1,10 +1,11 @@
-# main.py
 import asyncio
 import json
 import os
 import sys
-import re
+
 from processes.scraper import GoogleMapsScraper
+from config.config import MAX_CONCURRENT_TABS, BUSINESSES_FILE, LOCATIONS_FILE
+from processes.sync_manager import SyncManager
 
 def clean_filename(text):
     return "".join(c if c.isalnum() or c.isspace() else "" for c in text).lower().replace(" ", "_")
@@ -19,7 +20,6 @@ async def worker(worker_id, task_queue, semaphore):
         query, state_name, business = task_data
             
         async with semaphore:
-            # Hierarchical path: leads/State_Name/Business_Type/query.csv[cite: 2]
             folder_path = os.path.join("leads", state_name, business)
             os.makedirs(folder_path, exist_ok=True)
             
@@ -43,8 +43,8 @@ async def main():
     print("      AUTOMATED MULTI-TAB PARALLEL GOOGLE MAPS SCRAPER      ")
     print("=" * 70)
 
-    businesses_path = os.path.join("data", "dummybusinesses.json")
-    locations_path = os.path.join("data", "dummylocations.json")
+    businesses_path = os.path.join("data", BUSINESSES_FILE)
+    locations_path = os.path.join("data", LOCATIONS_FILE)
 
     if not os.path.exists(businesses_path) or not os.path.exists(locations_path):
         print(f"[!] Error: Could not find '{businesses_path}' or '{locations_path}' in project folder.")
@@ -69,10 +69,9 @@ async def main():
 
     print(f"[*] Loaded {task_count} automated search tasks into the queue.")
 
-    MAX_CONCURRENT_TABS = 3 
     semaphore = asyncio.Semaphore(MAX_CONCURRENT_TABS)
 
-    print(f"[*] Concurrency Limit : {MAX_CONCURRENT_TABS} parallel browser tabs[cite: 2]")
+    print(f"[*] Concurrency Limit : {MAX_CONCURRENT_TABS} parallel browser tabs")
     print("-" * 70 + "\n")
 
     num_workers = MAX_CONCURRENT_TABS
@@ -90,6 +89,11 @@ async def main():
     print("\n" + "=" * 70)
     print("       🎉 ALL MULTI-TAB SCRAPING TASKS COMPLETED SUCCESSFULLY!       ")
     print("=" * 70)
+
+    print("\n[Main] Performing final batch sync check for any remaining un-synced leads...")
+    sync_worker = SyncManager()
+    sync_worker.upload_batch()
+    print("[Main] Sync check complete. All data safely processed!")
 
 if __name__ == "__main__":
     try:
