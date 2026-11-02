@@ -1,16 +1,21 @@
-# config.py
 import os
 
 BASE_URL = "https://www.google.com/maps"
 HEADLESS_MODE = False
-INACTIVITY_TIMEOUT = 120  # 2 minutes in seconds
+INACTIVITY_TIMEOUT = 120
 SLOW_MO = 50
-
-# Master tracking ledger stored in the data folder
+MAX_CONCURRENT_TABS = 3
+BUSINESSES_FILE = "dummybusinesses.json"
+LOCATIONS_FILE = "dummylocations.json"
 TRACKING_FILE = os.path.join("data", "seen_leads.txt")
 
+
+BATCH_THRESHOLD = 10 #for the limit of upload of the leads
+SYNC_MANIFEST_FILE = os.path.join("data", "sync_manifest.json") 
+API_UPLOAD_ENDPOINT = "edit this with the upload link that you want to send the csv file after the batch is reached" 
+LEADS_DIR = "leads"  
+
 SELECTORS = {
-    # Fallback list for the Google Maps search input box to prevent timeouts
     "search_inputs": [
         "input#searchboxinput",
         "input[aria-label*='Search']",
