@@ -1,4 +1,3 @@
-# scraper.py
 import asyncio
 import time
 from playwright.async_api import async_playwright
@@ -41,7 +40,6 @@ class GoogleMapsScraper:
             print(f"[*] Navigating to Google Maps...")
             await page.goto(BASE_URL, timeout=60000)
 
-            # Cookie banner handling
             try:
                 accept_button = page.locator("button:has-text('Accept all'), button:has-text('I agree'), form[action*='consent'] button")
                 if await accept_button.count() > 0:
@@ -50,7 +48,6 @@ class GoogleMapsScraper:
             except Exception:
                 pass
 
-            # Search box interaction using multi-selector fallback list
             print(f"[*] Searching for query: '{self.query}'")
             search_box_filled = False
             for selector in SELECTORS["search_inputs"]:
@@ -68,8 +65,7 @@ class GoogleMapsScraper:
                 raise Exception("Could not find search input using any provided selector.")
 
             await page.keyboard.press("Enter")
-            
-            # Wait for results feed
+
             await page.locator(SELECTORS["results_feed"]).wait_for(state="visible", timeout=15000)
             print("[*] Results feed loaded successfully. Beginning extraction loop...")
 
@@ -97,7 +93,7 @@ class GoogleMapsScraper:
                         await asyncio.sleep(1.5)
 
                         lead_data = await GoogleMapsParser.parse_business_details(page)
-                        saved = self.storage.save_lead(lead_data)
+                        saved = await self.storage.save_lead(lead_data)
 
                         if saved:
                             last_lead_time = time.time()
