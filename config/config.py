@@ -12,7 +12,7 @@ TRACKING_FILE = os.path.join("data", "seen_leads.txt")
 
 BATCH_THRESHOLD = 10 #for the limit of upload of the leads
 SYNC_MANIFEST_FILE = os.path.join("data", "sync_manifest.json") 
-API_UPLOAD_ENDPOINT = "edit this with the upload link that you want to send the csv file after the batch is reached" 
+API_UPLOAD_ENDPOINT = "update this according to your requirements" 
 LEADS_DIR = "leads"  
 
 SELECTORS = {
