@@ -15,9 +15,9 @@ class LeadStorage:
         self.lock = asyncio.Lock()
         
         self.load_seen_leads()
-        
         self.initialize_file()
 
+        # Register file on startup
         SyncManager().register_file(self.filename)
 
     def load_seen_leads(self):
@@ -36,16 +36,9 @@ class LeadStorage:
 
     def initialize_file(self):
         headers = [
-            "Business Name", 
-            "Rating", 
-            "Reviews Count", 
-            "Address", 
-            "Hours", 
-            "Phone", 
-            "Website", 
-            "Plus Code"
+            "Business Name", "Rating", "Reviews Count", 
+            "Address", "Hours", "Phone", "Website", "Plus Code"
         ]
-        
         os.makedirs(os.path.dirname(os.path.abspath(self.filename)), exist_ok=True)
         
         with open(self.filename, mode='w', newline='', encoding='utf-8') as file:
@@ -57,7 +50,7 @@ class LeadStorage:
 
         async with self.lock:
             if lead_id in self.seen_leads:
-                return False  
+                return False
 
             self.seen_leads.add(lead_id)
 
@@ -80,22 +73,18 @@ class LeadStorage:
                 writer = csv.writer(file)
                 writer.writerow(row)
 
+            # --- NEW: Ensure file is re-registered as pending whenever a new lead is added ---
+            SyncManager().register_file(self.filename)
+
             async with LeadStorage._global_lock:
                 LeadStorage._global_unsynced_count += 1
                 current_count = LeadStorage._global_unsynced_count
                 print(f"[Batch Tracker] Collective un-synced leads: {current_count}/{BATCH_THRESHOLD}")
 
                 if current_count >= BATCH_THRESHOLD:
-                    print(f"[Batch Trigger] Threshold of {BATCH_THRESHOLD} leads reached! Initiating batch transfer workflow...")
-                    
+                    print(f"[Batch Trigger] Threshold of {BATCH_THRESHOLD} leads reached! Initiating batch transfer...")
                     sync_worker = SyncManager()
-                    success = sync_worker.upload_batch()
-                    
-                    if success:
-                        print("[Batch Success] Batch upload completed successfully. Resetting global counter.")
-                    else:
-                        print("[Batch Warning] Batch upload encountered issues. Retrying in next cycle.")
-                        
+                    sync_worker.upload_batch()
                     LeadStorage._global_unsynced_count = 0
 
         return True
