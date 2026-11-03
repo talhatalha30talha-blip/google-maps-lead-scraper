@@ -1,8 +1,8 @@
 import os
 import json
+import csv
 import requests
-import pandas as pd
-from config.config import API_UPLOAD_ENDPOINT, SYNC_MANIFEST_FILE, LEADS_DIR
+from config.config import API_UPLOAD_ENDPOINT, SYNC_MANIFEST_FILE
 
 class SyncManager:
     def __init__(self, manifest_file=SYNC_MANIFEST_FILE):
@@ -16,6 +16,7 @@ class SyncManager:
                 json.dump({"pending_files": [], "completed_batches": []}, f, indent=4)
 
     def register_file(self, file_path):
+        """Registers or re-registers a CSV file into the pending sync manifest ledger."""
         try:
             with open(self.manifest_file, mode='r', encoding='utf-8') as f:
                 data = json.load(f)
@@ -27,23 +28,6 @@ class SyncManager:
                 json.dump(data, f, indent=4)
         except Exception as e:
             print(f"[Sync Error] Could not register file {file_path} in manifest: {e}")
-
-    def convert_csv_to_excel(self, csv_path):
-        try:
-            if not os.path.exists(csv_path):
-                print(f"[Sync Warning] CSV file not found for conversion: {csv_path}")
-                return None
-            
-            df = pd.read_csv(csv_path, encoding='utf-8')
-            
-            excel_path = csv_path.rsplit('.', 1)[0] + '.xlsx'
-            
-            df.to_excel(excel_path, index=False, engine='openpyxl')
-            print(f"[Sync Success] Converted {csv_path} -> {excel_path}")
-            return excel_path
-        except Exception as e:
-            print(f"[Sync Error] Failed to convert CSV to Excel for {csv_path}: {e}")
-            return None
 
     def upload_batch(self):
         if not os.path.exists(self.manifest_file):
@@ -58,48 +42,83 @@ class SyncManager:
                 print("[Sync Info] No pending files to upload.")
                 return True
 
-            print(f"[Sync Info] Preparing batch upload for {len(pending_files)} files...")
+            print(f"[Sync Info] Preparing array-based JSON batch payload for {len(pending_files)} files...")
             
-            converted_files = []
-            file_handles = []
+            # --- NEW: Initialize the payload as a list instead of a dictionary ---
+            batch_payload = []
+            valid_files_to_process = []
 
             for csv_path in pending_files:
-                excel_path = self.convert_csv_to_excel(csv_path)
-                if excel_path and os.path.exists(excel_path):
-                    converted_files.append(excel_path)
-
-            if not converted_files:
-                print("[Sync Warning] No valid Excel files generated for this batch transfer.")
-                return False
-
-            try:
-                for path in converted_files:
-                    file_handles.append(('files', (os.path.basename(path), open(path, 'rb'), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')))
-
-                print(f"[Sync Info] Sending batch to endpoint: {API_UPLOAD_ENDPOINT}")
-                response = requests.post(API_UPLOAD_ENDPOINT, files=file_handles, timeout=30)
-
-                if response.status_code == 200:
-                    print(f"[Sync Success] Batch successfully transferred to endpoint! Response: {response.text}")
+                if os.path.exists(csv_path):
+                    base_name = os.path.basename(csv_path)
+                    query_name = os.path.splitext(base_name)[0]  # Removes '.csv'
                     
-                    data["completed_batches"].extend(pending_files)
-                    data["pending_files"] = [] 
-
-                    with open(self.manifest_file, mode='w', encoding='utf-8') as f:
-                        json.dump(data, f, indent=4)
-                        
-                    return True
+                    file_rows = []
+                    
+                    with open(csv_path, mode='r', encoding='utf-8') as file:
+                        reader = csv.reader(file)
+                        headers = next(reader, None)
+                        if headers:
+                            row_count = 0
+                            for row in reader:
+                                row_count += 1
+                                row_dict = {}
+                                for i, val in enumerate(row):
+                                    if i < len(headers):
+                                        row_dict[headers[i]] = val
+                                file_rows.append(row_dict)
+                            
+                            # Only include if file actually contains scraped leads
+                            if row_count > 0:
+                                # --- NEW: Append an object with "name" and "leads" keys for each file ---
+                                batch_payload.append({
+                                    "name": query_name,
+                                    "leads": file_rows
+                                })
+                                valid_files_to_process.append(csv_path)
                 else:
-                    print(f"[Sync Error] Endpoint rejected batch. Status Code: {response.status_code}, Response: {response.text}")
-                    return False
+                    print(f"[Sync Warning] CSV file not found on disk: {csv_path}")
 
-            finally:
-                for _, (_, f_obj, _) in file_handles:
-                    f_obj.close()
+            if not batch_payload:
+                print("[Sync Warning] No valid CSV lead data found to upload.")
+                return True
+
+            print(f"[Sync Info] Sending array-based JSON batch to endpoint: {API_UPLOAD_ENDPOINT}")
+            response = requests.post(API_UPLOAD_ENDPOINT, json=batch_payload, timeout=30)
+
+            if response.status_code == 200:
+                print(f"[Sync Success] Batch JSON successfully received by n8n! Response: {response.text}")
+                
+                # Clear/Reset the successfully uploaded CSV files back to headers only
+                headers = [
+                    "Business Name", "Rating", "Reviews Count", 
+                    "Address", "Hours", "Phone", "Website", "Plus Code"
+                ]
+                for csv_path in valid_files_to_process:
+                    if os.path.exists(csv_path):
+                        try:
+                            with open(csv_path, mode='w', newline='', encoding='utf-8') as f:
+                                writer = csv.writer(f)
+                                writer.writerow(headers)
+                            print(f"[Sync Info] Cleared sent leads from CSV file: {csv_path}")
+                        except Exception as e:
+                            print(f"[Sync Warning] Could not clear CSV file {csv_path}: {e}")
+
+                # Update manifest tracking
+                data["completed_batches"].extend(valid_files_to_process)
+                data["pending_files"] = []  # Clear pending queue until new leads re-register files
+
+                with open(self.manifest_file, mode='w', encoding='utf-8') as f:
+                    json.dump(data, f, indent=4)
+                    
+                return True
+            else:
+                print(f"[Sync Error] Endpoint rejected batch. Status Code: {response.status_code}, Response: {response.text}")
+                return False
 
         except requests.exceptions.RequestException as re:
             print(f"[Sync Network Error] Could not reach endpoint {API_UPLOAD_ENDPOINT}: {re}")
             return False
         except Exception as e:
-            print(f"[Sync Error] Unexpected error during batch upload: {e}")
+            print(f"[Sync Error] Unexpected error during JSON batch upload: {e}")
             return False
